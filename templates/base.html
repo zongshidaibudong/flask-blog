@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{{ site_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="{{ url_for('index') }}" class="site-title">
+        <img src="{{ url_for('static', filename='assets/logo.svg') }}" alt="Logo" class="site-logo">
+        <span>{{ site_name }}</span>
+      </a>
+      <nav class="site-nav">
+        <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}class="active"{% endif %}>首页</a>
+        <a href="{{ url_for('archive') }}" {% if request.endpoint == 'archive' %}class="active"{% endif %}>归档</a>
+        <a href="{{ url_for('about') }}" {% if request.endpoint == 'about' %}class="active"{% endif %}>关于</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="title-block">
+        <div><span class="label">设计 DESIGN</span>代凯文</div>
+        <div><span class="label">比例 SCALE</span>1 : 1</div>
+        <div><span class="label">图号 DWG NO.</span>DKW-BLOG-001</div>
+        <div><span class="label">日期 DATE</span>{{ current_year }}</div>
+      </div>
+      <p class="footer-note">POWERED BY FLASK · 机械工程师的数字图板</p>
+    </div>
+  </footer>
+</body>
+</html>

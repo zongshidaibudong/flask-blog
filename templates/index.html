@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <div class="hero-banner">
+    <img src="{{ url_for('static', filename='assets/banner.svg') }}" alt="工程蓝图横幅">
+  </div>
+  <p class="hero-kicker">MECHANICAL ENGINEERING × CODE</p>
+  <h1>代凯文的工程图板</h1>
+  <p>机械工程在读 · 记录建模、制图与编程的日常 · 共 {{ posts|length }} 张"图纸"</p>
+</section>
+
+<div class="tag-cloud">
+  {% for tag in all_tags %}
+  <a class="tag" href="{{ url_for('tag_posts', tag=tag) }}"># {{ tag }}</a>
+  {% endfor %}
+</div>
+
+<section class="post-list">
+  {% for post in posts %}
+  <article class="post-card">
+    <h2><a href="{{ url_for('post_detail', slug=post.slug) }}">{{ post.title }}</a></h2>
+    <div class="post-meta">
+      <time>{{ post.date }}</time>
+      {% for tag in post.tags %}
+      <a class="tag" href="{{ url_for('tag_posts', tag=tag) }}">{{ tag }}</a>
+      {% endfor %}
+    </div>
+    <p class="post-summary">{{ post.summary }}</p>
+    <a class="read-more" href="{{ url_for('post_detail', slug=post.slug) }}">展开图纸 →</a>
+  </article>
+  {% else %}
+  <p class="empty">暂无图纸，往 posts/ 目录里添加 .md 文件即可。</p>
+  {% endfor %}
+</section>
+{% endblock %}
