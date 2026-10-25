@@ -377,8 +377,22 @@ a:hover { text-decoration: underline; }
 
 /* ===== 移动端 ===== */
 @media (max-width: 600px) {
-  .post-full { padding: 26px 20px; }
+  /* 页头改为可换行，避免标题 + 三个导航在窄屏上撑出横向滚动 */
+  .header-inner {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 10px 0;
+  }
   .site-title { font-size: 1rem; }
-  .site-nav a { margin-left: 14px; }
+  .site-nav a { margin-left: 14px; font-size: 0.9rem; }
+  .hero h1 { font-size: 1.5rem; letter-spacing: 0.06em; }
+  .hero-kicker { font-size: 0.65rem; letter-spacing: 0.2em; }
+  .hero p { font-size: 0.88rem; }
+  .tag { font-size: 0.72rem; padding: 1px 8px; }
+  .post-full { padding: 26px 20px; }
   .title-block > div { flex: 1 1 45%; border-bottom: 1px solid var(--ink); }
 }
+
+/* 图片一律不超出容器 */
+img { max-width: 100%; height: auto; }
