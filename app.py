@@ -14,6 +14,7 @@
 """
 from datetime import datetime
 from pathlib import Path
+import html as html_lib
 import os
 import re
 
@@ -56,14 +57,31 @@ _DANGEROUS_TAGS = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _EVENT_ATTR = re.compile(r"""\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)""", re.IGNORECASE)
-_BAD_URL = re.compile(r"""(href|src)\s*=\s*(['"])\s*(javascript:|data:text/html)""", re.IGNORECASE)
+# 无引号写法：href=javascript:...
+_BAD_URL = re.compile(r"""(href|src)\s*=\s*(javascript:|data:text/html|vbscript:)""", re.IGNORECASE)
+_ATTR_WITH_URL = re.compile(r"""\b(href|src)(\s*=\s*)(["'])(.*?)\3""", re.IGNORECASE | re.DOTALL)
+_UNSAFE_SCHEMES = ("javascript:", "data:text/html", "vbscript:")
+
+
+def _clean_url_attrs(html_text: str) -> str:
+    """逐个检查 href/src 的值，先做实体解码再判协议，防止 java&#115;cript: 绕过。"""
+
+    def repl(match: re.Match) -> str:
+        attr, eq, quote, value = match.group(1), match.group(2), match.group(3), match.group(4)
+        decoded = html_lib.unescape(value).strip().lower().replace("\t", "").replace("\n", "")
+        if decoded.startswith(_UNSAFE_SCHEMES) or "javascript:" in decoded:
+            return f"{attr}{eq}{quote}#{quote}"
+        return match.group(0)
+
+    return _ATTR_WITH_URL.sub(repl, html_text)
 
 
 def sanitize_html(html):
-    """去掉脚本、内联事件与 javascript: 链接，保留正常的排版标签。"""
+    """去掉脚本、内联事件与危险协议的链接，保留正常的排版标签。"""
     cleaned = _DANGEROUS_TAGS.sub("", html)
     cleaned = _EVENT_ATTR.sub("", cleaned)
-    cleaned = _BAD_URL.sub(r'\1=\2#', cleaned)
+    cleaned = _BAD_URL.sub(r"\1=\2#", cleaned)
+    cleaned = _clean_url_attrs(cleaned)
     return cleaned
 
 
