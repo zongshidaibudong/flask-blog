@@ -1,21 +1,60 @@
-# Python
+# ---------------------------------------------------------------------------
+# 本仓库是一个 Flask + Markdown 的个人博客。
+# 下面按类别列出不纳入版本管理的内容；dist/ 是刻意保留的静态导出产物，
+# 因为线上静态托管直接读它，所以不要忽略。
+# ---------------------------------------------------------------------------
+
+# 1. Python 字节码与缓存
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 2. 虚拟环境（本机、conda、poetry 等）
 .venv/
 venv/
 env/
+ENV/
+.conda/
+.python-version
 
-# Flask
+# 3. 环境变量与密钥
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.json
+
+# 4. 本地数据库
 instance/
 *.db
+*.sqlite
 *.sqlite3
+*.db-journal
 
-# OS
+# 5. 日志与临时文件
+*.log
+logs/
+tmp/
+*.tmp
+*.bak
+
+# 6. 操作系统
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# IDE
+# 7. 编辑器
 .vscode/
 .idea/
 *.swp
+*.swo
+
+# 8. 依赖与构建缓存（本项目没有前端构建，留着防止误提交）
+node_modules/
