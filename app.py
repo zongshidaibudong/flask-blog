@@ -20,9 +20,13 @@ import re
 
 import markdown
 from flask import Flask, abort, render_template
+from html.parser import HTMLParser
 
 BASE_DIR = Path(__file__).resolve().parent
 POSTS_DIR = BASE_DIR / "posts"
+
+# 最近一次 load_posts() 跳过的文件（文件名, 原因）。导出脚本据此判断是否要失败退出。
+SKIPPED_POSTS = []
 
 # 站点对外地址：分享卡片（Open Graph）要求 og:image / og:url 是绝对地址。
 # 部署到自己的域名时，改这里或用环境变量 SITE_URL 覆盖。
@@ -48,41 +52,113 @@ def add_security_headers(response):
     return response
 
 
-# Markdown 里可能出现的危险片段。python-markdown 3.x 已移除 safe_mode，
-# 传 html_replacement_text 这类旧参数会被静默忽略，所以原文 HTML 会直通；
-# 这里在渲染后按白名单做一次清洗，配合模板里的 CSP 作为第二道防线。
-_DANGEROUS_TAGS = re.compile(
-    r"<\s*(script|style|iframe|object|embed|form|link|meta)\b[^>]*>.*?<\s*/\s*\1\s*>"
-    r"|<\s*(script|style|iframe|object|embed|form|link|meta)\b[^>]*/?>",
-    re.IGNORECASE | re.DOTALL,
-)
-_EVENT_ATTR = re.compile(r"""\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)""", re.IGNORECASE)
-# 无引号写法：href=javascript:...
-_BAD_URL = re.compile(r"""(href|src)\s*=\s*(javascript:|data:text/html|vbscript:)""", re.IGNORECASE)
-_ATTR_WITH_URL = re.compile(r"""\b(href|src)(\s*=\s*)(["'])(.*?)\3""", re.IGNORECASE | re.DOTALL)
-_UNSAFE_SCHEMES = ("javascript:", "data:text/html", "vbscript:")
+# python-markdown 3.x 已移除 safe_mode，html_replacement_text 这类旧参数会被静默忽略，
+# 原文 HTML 会直通到模板的 |safe。下面用一棵"白名单重建"的思路清洗：
+# 用 HTMLParser 把片段拆成 token，只保留允许的标签与属性再重新拼回去。
+# 之所以不用正则删黑名单：删掉一段后两侧会重新拼接，<scr<script>ipt> 能拼出真的
+# <script>；正则还会把正文里"onclick=alert(1)"这种讲解文字一起吃掉。
+class _Sanitizer(HTMLParser):
+    """只保留白名单标签与属性，重建一份干净的 HTML。"""
 
+    ALLOWED_TAGS = {
+        "p", "br", "hr", "h1", "h2", "h3", "h4", "h5", "h6",
+        "ul", "ol", "li", "blockquote", "pre", "code", "kbd", "samp",
+        "em", "strong", "b", "i", "u", "s", "del", "ins", "mark", "small",
+        "sub", "sup", "span", "div", "figure", "figcaption", "caption",
+        "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+        "a", "img", "dl", "dt", "dd", "abbr", "time",
+    }
+    VOID_TAGS = {"br", "hr", "img"}
+    # 这些标签连同内部文字一起丢弃
+    DROP_CONTENT = {
+        "script", "style", "iframe", "object", "embed", "form", "input",
+        "textarea", "select", "button", "link", "meta", "base", "noscript",
+        "template", "svg", "math",
+    }
+    ALLOWED_ATTRS = {
+        "*": {"class", "id", "title", "lang", "dir"},
+        "a": {"href", "hreflang"},
+        "img": {"src", "alt", "width", "height", "loading"},
+        "th": {"colspan", "rowspan", "scope"},
+        "td": {"colspan", "rowspan"},
+        "ol": {"start", "reversed"},
+        "time": {"datetime"},
+        "abbr": set(),
+    }
+    URL_ATTRS = {"href", "src", "xlink:href", "action", "formaction", "poster"}
+    UNSAFE_SCHEMES = ("javascript:", "vbscript:", "data:text/html")
 
-def _clean_url_attrs(html_text: str) -> str:
-    """逐个检查 href/src 的值，先做实体解码再判协议，防止 java&#115;cript: 绕过。"""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)  # 属性值里的实体自动解码
+        self._out = []
+        self._drop_depth = 0
 
-    def repl(match: re.Match) -> str:
-        attr, eq, quote, value = match.group(1), match.group(2), match.group(3), match.group(4)
-        decoded = html_lib.unescape(value).strip().lower().replace("\t", "").replace("\n", "")
-        if decoded.startswith(_UNSAFE_SCHEMES) or "javascript:" in decoded:
-            return f"{attr}{eq}{quote}#{quote}"
-        return match.group(0)
+    # --- 工具 ---
+    @staticmethod
+    def _safe_url(value: str) -> str:
+        cleaned = "".join(ch for ch in value if ord(ch) > 0x20).strip()
+        if cleaned.lower().startswith(_Sanitizer.UNSAFE_SCHEMES) or "javascript:" in cleaned.lower():
+            return "#"
+        return value
 
-    return _ATTR_WITH_URL.sub(repl, html_text)
+    def _render_attrs(self, tag, attrs):
+        allowed = self.ALLOWED_ATTRS.get(tag, set()) | self.ALLOWED_ATTRS["*"]
+        pieces = []
+        for name, value in attrs:
+            name = (name or "").lower()
+            if not name or name.startswith("on"):
+                continue  # 内联事件一律不保留
+            if name not in allowed:
+                continue
+            value = "" if value is None else value
+            if name in self.URL_ATTRS:
+                value = self._safe_url(value)
+            pieces.append(f' {name}="{html_lib.escape(value, quote=True)}"')
+        return "".join(pieces)
+
+    # --- HTMLParser 回调 ---
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        if tag in self.DROP_CONTENT:
+            self._drop_depth += 1
+            return
+        if self._drop_depth or tag not in self.ALLOWED_TAGS:
+            return
+        self._out.append(f"<{tag}{self._render_attrs(tag, attrs)}>")
+
+    def handle_startendtag(self, tag, attrs):
+        tag = tag.lower()
+        if tag in self.DROP_CONTENT or self._drop_depth or tag not in self.ALLOWED_TAGS:
+            return
+        self._out.append(f"<{tag}{self._render_attrs(tag, attrs)}>")
+        if tag not in self.VOID_TAGS:
+            self._out.append(f"</{tag}>")
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag in self.DROP_CONTENT:
+            if self._drop_depth:
+                self._drop_depth -= 1
+            return
+        if self._drop_depth or tag not in self.ALLOWED_TAGS or tag in self.VOID_TAGS:
+            return
+        self._out.append(f"</{tag}>")
+
+    def handle_data(self, data):
+        if self._drop_depth:
+            return
+        self._out.append(html_lib.escape(data, quote=False))
+
+    def result(self) -> str:
+        return "".join(self._out)
 
 
 def sanitize_html(html):
-    """去掉脚本、内联事件与危险协议的链接，保留正常的排版标签。"""
-    cleaned = _DANGEROUS_TAGS.sub("", html)
-    cleaned = _EVENT_ATTR.sub("", cleaned)
-    cleaned = _BAD_URL.sub(r"\1=\2#", cleaned)
-    cleaned = _clean_url_attrs(cleaned)
-    return cleaned
+    """按白名单重建 HTML 片段，丢弃脚本、事件属性与危险协议的链接。"""
+    parser = _Sanitizer()
+    parser.feed(html)
+    parser.close()
+    return parser.result()
 
 
 def parse_date(value):
@@ -96,14 +172,17 @@ def parse_date(value):
 def load_posts():
     """读取 posts/ 目录下所有 Markdown 文章，按日期倒序返回。
 
-    单篇文章解析失败只跳过该篇并打印一条警告，不拖垮整站。
+    单篇文章读不了或解析失败时跳过该篇，不拖垮整站；但代价要让人看得见：
+    跳过会写一条 app.logger 警告，同时记进 SKIPPED_POSTS，导出脚本据此失败退出。
     """
+    global SKIPPED_POSTS
     posts = []
+    skipped = []
     for path in sorted(POSTS_DIR.glob("*.md")):
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as exc:  # 编码错、文件被占用等
-            print(f"[warn] 跳过无法读取的文章 {path.name}: {exc}")
+            skipped.append((path.name, f"读取失败：{exc}"))
             continue
 
         try:
@@ -111,7 +190,7 @@ def load_posts():
             html = md.convert(text)
             meta = md.Meta  # 形如 {key: [value]}
         except Exception as exc:  # noqa: BLE001 —— 坏文件不该让整站 500
-            print(f"[warn] 跳过解析失败的文章 {path.name}: {exc}")
+            skipped.append((path.name, f"解析失败：{exc}"))
             continue
 
         raw_date = meta.get("date", ["1970-01-01"])[0]
@@ -132,6 +211,9 @@ def load_posts():
             }
         )
     posts.sort(key=lambda p: (p["date_obj"], p["slug"]), reverse=True)
+    for name, reason in skipped:
+        app.logger.warning("跳过文章 %s（%s）—— 该篇详情页与其标签页会不可用", name, reason)
+    SKIPPED_POSTS = skipped
     return posts
 
 
