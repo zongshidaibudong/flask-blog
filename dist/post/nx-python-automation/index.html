@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用 Python 驱动 NX：二次开发入门 - 代凯文的工程图板</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="/" class="site-title">
+        <img src="/static/assets/logo.svg" alt="Logo" class="site-logo">
+        <span>代凯文的工程图板</span>
+      </a>
+      <nav class="site-nav">
+        <a href="/" >首页</a>
+        <a href="/archive/" >归档</a>
+        <a href="/about/" >关于</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    
+<article class="post-full">
+  <header class="post-header">
+    <h1>用 Python 驱动 NX：二次开发入门</h1>
+    <div class="post-meta">
+      <time>2026-08-28</time>
+      
+      <a class="tag" href="/tag/NX/">NX</a>
+      
+      <a class="tag" href="/tag/Python/">Python</a>
+      
+      <a class="tag" href="/tag/%E4%BA%8C%E6%AC%A1%E5%BC%80%E5%8F%91/">二次开发</a>
+      
+    </div>
+  </header>
+  <div class="post-content markdown-body">
+    <h2 id="nx">为什么要给 NX 写脚本</h2>
+<p>大一做 CAD/NX 作业时发现：同样的垫圈、螺母、销轴，每个装配体都要画一遍。
+手动重复创建标准件效率太低，而 NX 的 NXOpen API 恰好可以用 Python 自动化。</p>
+<h2 id="_1">环境与第一个脚本</h2>
+<p>NX 安装后自带 Python 解释器，菜单里可以直接运行：</p>
+<pre><code class="language-python">import NXOpen
+
+session = NXOpen.Session.GetSession()
+work_part = session.Parts.Work
+
+# 新建一个立方体块
+block_feat, body = work_part.Features.CreateBlockBuilder(None)
+</code></pre>
+<h2 id="_2">实际能自动化的事情</h2>
+<ol>
+<li><strong>参数化标准件</strong>：输入规格 M10 / M12，自动生成对应尺寸的螺母</li>
+<li><strong>批量出图</strong>：遍历装配体所有零件，自动导出工程图 PDF</li>
+<li><strong>装配检查</strong>：脚本遍历约束，报告缺配对的零件</li>
+</ol>
+<h2 id="_3">学习路线建议</h2>
+<ul>
+<li>先读 <code>NXOpen</code> 的帮助文档（NX 安装目录里有 CHM）</li>
+<li>用「录制」功能把手动操作转成代码，再改参数</li>
+<li>从简单特征（块、圆柱、孔）开始，逐步过渡到草图和约束</li>
+</ul>
+<p>把课程作业当成 API 练习场，建模速度和理解都会上一个台阶。</p>
+  </div>
+  <footer class="post-footer">
+    <a href="/">← 返回首页</a>
+  </footer>
+</article>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="title-block">
+        <div><span class="label">设计 DESIGN</span>代凯文</div>
+        <div><span class="label">比例 SCALE</span>1 : 1</div>
+        <div><span class="label">图号 DWG NO.</span>DKW-BLOG-001</div>
+        <div><span class="label">日期 DATE</span>2026</div>
+      </div>
+      <p class="footer-note">POWERED BY FLASK · 机械工程师的数字图板</p>
+    </div>
+  </footer>
+</body>
+</html>
