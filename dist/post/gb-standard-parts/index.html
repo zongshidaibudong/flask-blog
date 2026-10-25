@@ -3,7 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- 静态托管拿不到 HTTP 响应头，这里用 meta 补一道 CSP；
+       frame-ancestors 在 meta 里不生效，故只在 Flask 侧的那份头里给。 -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self'; img-src 'self' data:; script-src 'none'; object-src 'none'; base-uri 'self'">
   <title>用 Python 查 GB 标准件：小工具实现 - 代凯文的工程图板</title>
+
+  <meta name="description" content="画图时反复翻手册查螺母、垫圈尺寸太低效，用 Python 写一个 GB 标准件查询小工具。">
+  <meta name="author" content="代凯文">
+
+  <!-- 图标：现代浏览器读 SVG，旧浏览器与 iOS 读 PNG -->
+  <link rel="icon" type="image/svg+xml" href="/static/assets/favicon.svg">
+  <link rel="alternate icon" type="image/png" href="/static/assets/favicon.png">
+  <link rel="apple-touch-icon" href="/static/assets/apple-touch-icon.png">
+
+  <!-- 分享预览（Open Graph / Twitter Card），og:image 必须是绝对地址 -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="代凯文的工程图板">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:title" content="用 Python 查 GB 标准件：小工具实现 - 代凯文的工程图板">
+  <meta property="og:description" content="画图时反复翻手册查螺母、垫圈尺寸太低效，用 Python 写一个 GB 标准件查询小工具。">
+  <meta property="og:url" content="https://welcome-crocodile-d75ecc93ae662-1516600636.tcloudbaseapp.com/post/gb-standard-parts/">
+  <meta property="og:image" content="https://welcome-crocodile-d75ecc93ae662-1516600636.tcloudbaseapp.com/static/assets/og-cover.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="用 Python 查 GB 标准件：小工具实现 - 代凯文的工程图板">
+  <meta name="twitter:description" content="画图时反复翻手册查螺母、垫圈尺寸太低效，用 Python 写一个 GB 标准件查询小工具。">
+  <meta name="twitter:image" content="https://welcome-crocodile-d75ecc93ae662-1516600636.tcloudbaseapp.com/static/assets/og-cover.png">
+
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
