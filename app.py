@@ -14,12 +14,21 @@
 """
 from datetime import datetime
 from pathlib import Path
+import os
+import re
 
 import markdown
 from flask import Flask, abort, render_template
 
 BASE_DIR = Path(__file__).resolve().parent
 POSTS_DIR = BASE_DIR / "posts"
+
+# 站点对外地址：分享卡片（Open Graph）要求 og:image / og:url 是绝对地址。
+# 部署到自己的域名时，改这里或用环境变量 SITE_URL 覆盖。
+SITE_URL = (
+    os.environ.get("SITE_URL")
+    or "https://welcome-crocodile-d75ecc93ae662-1516600636.tcloudbaseapp.com"
+).rstrip("/")
 
 app = Flask(__name__)
 
@@ -38,35 +47,73 @@ def add_security_headers(response):
     return response
 
 
+# Markdown 里可能出现的危险片段。python-markdown 3.x 已移除 safe_mode，
+# 传 html_replacement_text 这类旧参数会被静默忽略，所以原文 HTML 会直通；
+# 这里在渲染后按白名单做一次清洗，配合模板里的 CSP 作为第二道防线。
+_DANGEROUS_TAGS = re.compile(
+    r"<\s*(script|style|iframe|object|embed|form|link|meta)\b[^>]*>.*?<\s*/\s*\1\s*>"
+    r"|<\s*(script|style|iframe|object|embed|form|link|meta)\b[^>]*/?>",
+    re.IGNORECASE | re.DOTALL,
+)
+_EVENT_ATTR = re.compile(r"""\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)""", re.IGNORECASE)
+_BAD_URL = re.compile(r"""(href|src)\s*=\s*(['"])\s*(javascript:|data:text/html)""", re.IGNORECASE)
+
+
+def sanitize_html(html):
+    """去掉脚本、内联事件与 javascript: 链接，保留正常的排版标签。"""
+    cleaned = _DANGEROUS_TAGS.sub("", html)
+    cleaned = _EVENT_ATTR.sub("", cleaned)
+    cleaned = _BAD_URL.sub(r'\1=\2#', cleaned)
+    return cleaned
+
+
+def parse_date(value):
+    """把 date 元信息解析成日期，解析失败时退回到最早，避免排序错位。"""
+    try:
+        return datetime.strptime(value.strip(), "%Y-%m-%d")
+    except (ValueError, AttributeError):
+        return datetime.min
+
+
 def load_posts():
-    """读取 posts/ 目录下所有 Markdown 文章，按日期倒序返回。"""
+    """读取 posts/ 目录下所有 Markdown 文章，按日期倒序返回。
+
+    单篇文章解析失败只跳过该篇并打印一条警告，不拖垮整站。
+    """
     posts = []
     for path in sorted(POSTS_DIR.glob("*.md")):
-        md = markdown.Markdown(
-            extensions=["extra", "meta", "toc"],
-            output_format="html5",
-            # Markdown files are local content. Do not pass raw HTML through to
-            # the template's `|safe` rendering, otherwise a post could become
-            # stored XSS if an untrusted file is copied into posts/.
-            html_replacement_text="",
-        )
-        html = md.convert(path.read_text(encoding="utf-8"))
-        meta = md.Meta  # 形如 {key: [value]}
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:  # 编码错、文件被占用等
+            print(f"[warn] 跳过无法读取的文章 {path.name}: {exc}")
+            continue
+
+        try:
+            md = markdown.Markdown(extensions=["extra", "meta", "toc"], output_format="html5")
+            html = md.convert(text)
+            meta = md.Meta  # 形如 {key: [value]}
+        except Exception as exc:  # noqa: BLE001 —— 坏文件不该让整站 500
+            print(f"[warn] 跳过解析失败的文章 {path.name}: {exc}")
+            continue
+
+        raw_date = meta.get("date", ["1970-01-01"])[0]
         posts.append(
             {
                 "slug": path.stem,
                 "title": meta.get("title", ["未命名"])[0],
-                "date": meta.get("date", ["1970-01-01"])[0],
+                "date": raw_date,
+                "date_obj": parse_date(raw_date),
+                # 中英文逗号都当分隔符，避免 "Python，Flask" 被当成一个标签
                 "tags": [
                     t.strip()
-                    for t in meta.get("tags", [""])[0].split(",")
+                    for t in re.split(r"[,，]", meta.get("tags", [""])[0])
                     if t.strip()
                 ],
                 "summary": meta.get("summary", [""])[0],
-                "content": html,
+                "content": sanitize_html(html),
             }
         )
-    posts.sort(key=lambda p: p["date"], reverse=True)
+    posts.sort(key=lambda p: (p["date_obj"], p["slug"]), reverse=True)
     return posts
 
 
@@ -83,6 +130,8 @@ def inject_globals():
     tags = sorted({t for p in posts for t in p["tags"]})
     return {
         "site_name": "代凯文的工程图板",
+        "site_url": SITE_URL,
+        "site_description": "机械工程在读，记录建模、制图与编程的日常。",
         "all_tags": tags,
         "current_year": datetime.now().year,
     }
@@ -109,6 +158,9 @@ def archive():
 @app.route("/tag/<tag>/")
 def tag_posts(tag):
     posts = [p for p in load_posts() if tag in p["tags"]]
+    if not posts:
+        # 不存在的标签直接 404，避免返回一个空白的 200 页面
+        abort(404)
     return render_template("tag.html", tag=tag, posts=posts)
 
 
