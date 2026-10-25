@@ -37,6 +37,16 @@ def export() -> int:
     mod = load_app()
     client = mod.app.test_client()
     posts = mod.load_posts()
+
+    # 有文章被跳过时不要静默导出：少一篇文章 = 少一个详情页 = 少若干标签页，
+    # 线上页面数和 README 里的数字都会对不上。
+    skipped = getattr(mod, "SKIPPED_POSTS", [])
+    if skipped:
+        print("导出中止：以下文章被跳过，请先修复再导出")
+        for name, reason in skipped:
+            print(f"  - {name}: {reason}")
+        return 2
+
     tags = sorted({t for p in posts for t in p["tags"]})
 
     if DIST_DIR.exists():
