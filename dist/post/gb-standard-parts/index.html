@@ -73,20 +73,20 @@
 <p>把常用标准件的尺寸表存成字典，写一个查询函数：</p>
 <pre><code class="language-python">GB6170_NUT = {
     # 规格: (对边宽度 s, 厚度 m, 螺纹大径 d)
-    &quot;M6&quot;:  (10, 5.2, 6),
-    &quot;M8&quot;:  (13, 6.8, 8),
-    &quot;M10&quot;: (16, 8.4, 10),
-    &quot;M12&quot;: (18, 10.8, 12),
+    "M6":  (10, 5.2, 6),
+    "M8":  (13, 6.8, 8),
+    "M10": (16, 8.4, 10),
+    "M12": (18, 10.8, 12),
 }
 
 def query_nut(spec: str) -&gt; str:
-    &quot;&quot;&quot;查询 GB/T 6170 1型六角螺母尺寸&quot;&quot;&quot;
+    """查询 GB/T 6170 1型六角螺母尺寸"""
     if spec not in GB6170_NUT:
-        return f&quot;未收录规格 {spec}，请查阅手册&quot;
+        return f"未收录规格 {spec}，请查阅手册"
     s, m, d = GB6170_NUT[spec]
-    return f&quot;GB/T 6170 {spec}: 对边 {s} mm，厚度 {m} mm&quot;
+    return f"GB/T 6170 {spec}: 对边 {s} mm，厚度 {m} mm"
 
-print(query_nut(&quot;M10&quot;))
+print(query_nut("M10"))
 # GB/T 6170 M10: 对边 16 mm，厚度 8.4 mm
 </code></pre>
 <h2 id="_3">进阶方向</h2>
